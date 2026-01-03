@@ -434,13 +434,21 @@ with tab1:
         # 中间: 根据模式显示输入组件
         if st.session_state.input_mode == "text":
             # 文字输入模式
+            # 初始化上次处理的输入
+            if "last_processed_input" not in st.session_state:
+                st.session_state.last_processed_input = ""
+            
             user_input = st.text_input(
                 "输入你的想法...", 
                 key="text_input_field",
                 label_visibility="collapsed",
                 placeholder="输入你的想法..."
             )
-            if user_input:
+            
+            # 只处理新的、非空的、与上次不同的输入
+            if user_input and user_input != st.session_state.last_processed_input:
+                st.session_state.last_processed_input = user_input
+                
                 render_msg("user", user_input)
                 st.session_state.messages.append({"role": "user", "content": user_input})
                 
