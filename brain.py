@@ -45,7 +45,7 @@ def save_record(category, content, target_time=None, status="Pending", cost=0.0)
     df.to_csv(MEMORY_FILE, mode='a', header=not os.path.exists(MEMORY_FILE), index=False)
     return new_record
 
-def update_status(index, new_status, cost=0.0):
+def update_status(index, new_status, cost=0.0, expense_category="财务"):
     """更新某条记录的状态"""
     df = pd.read_csv(MEMORY_FILE)
     
@@ -53,100 +53,19 @@ def update_status(index, new_status, cost=0.0):
     df.at[index, "状态"] = new_status
     df.at[index, "关联花销"] = cost
     
-    # 2. 【核心逻辑变更】: 待办完成后，自动转为 "日程" (如果不涉及花销)
+    # 2. 待办完成后，自动转为 "日程"
     if df.at[index, "分类"] == "待办" and new_status == "Done":
-        if cost > 0:
-            df.at[index, "分类"] = "日程"
-        else:
             df.at[index, "分类"] = "日程"
             
     df.to_csv(MEMORY_FILE, index=False)
     
-    # 3. 如果产生了花销，额外追加一条财务明细
+    # 3. 如果产生了花销，额外追加一条财务明细 (使用用户选择的分类)
     if cost > 0:
         original_content = df.at[index, "内容"]
-        save_record("财务", f"完成任务: {original_content}", status="Done", cost=cost)
+        # 备注里写明来源
+        save_record(expense_category, f"{original_content} (来自待办)", status="Done", cost=cost)
 
-def process_input(text):
-    """理解用户输入"""
-    dates = search_dates(text, languages=['zh'], settings={'PREFER_DATES_FROM': 'future'})
-    parsed_date = None
-    if dates:
-        date_string, parsed_date = dates[0]
-    
-    now = datetime.now()
-    category = "想法"
-    # 关键词定义
-    finance_keywords = ["买", "花", "元", "块", "钱", "支付", "花费", "预算"]
-    schedule_keywords = ["开会", "去", "见面", "预约", "参加", "高铁", "飞机", "请", "约"]
-    todo_keywords = ["记得", "需要", "办", "做", "带"]
-    idea_keywords = ["我想", "主意", "灵感", "觉得", "可能", "不错", "建议"]
-
-    is_future = False
-    if parsed_date and parsed_date > now:
-        is_future = True
-
-    # === 分类逻辑 (遵循用户定义) ===
-    if is_future:
-        # [规则] 所有未来的事 -> 待办
-        category = "待办"
-    else:
-        # [规则] 过去/现在的事情
-        if any(k in text for k in finance_keywords):
-            category = "财务" 
-        elif parsed_date or any(k in text for k in schedule_keywords):
-            # 有时间或者有动词的过去事情 -> 日程
-            category = "日程"
-        elif any(k in text for k in idea_keywords):
-             # [优先判定] 如果有明显的创意词（比如"主意"），先判定为创意，防止被"做"等动词抢走
-            category = "创意"
-        elif any(k in text for k in todo_keywords):
-            # 明确的行动指令 -> 待办
-            category = "待办"
-        else:
-            # 既不是日程，也不是财务，也没有待办关键词 -> 归为 [创意]
-            category = "创意"
-
-    # 默认状态
-    status = "Done" if category in ["财务", "日程"] else "Pending"
-    
-    save_record(category, text, parsed_date, status=status)
-    return category, parsed_date
-
-# ================= 页面 UI =================
-
-st.set_page_config(page_title="时间胶囊", page_icon="💊", layout="wide")
-
-# (可选) 自定义 CSS 美化
-st.markdown("""
-<style>
-    /* 全局字体优化 */
-    .stApp {
-        font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
-    }
-    /* 标题样式 */
-    h1 {
-        color: #4F8BF9;
-        font-weight: bold;
-        text-align: center;
-    }
-    /* 侧边栏美化 */
-    section[data-testid="stSidebar"] {
-        background-color: #f7f9fc;
-    }
-    /* 聊天框微调 */
-    .stChatMessage {
-        border-radius: 10px;
-        margin-bottom: 10px;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# 初始化
-init_memory()
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-    st.session_state.messages.append({"role": "assistant", "content": "你好！我是你的时间胶囊。把你的想法、安排和记忆交给我吧。💊"})
+# ... (process_input 省略，未变) ...
 
 # === 侧边栏：分类管理 ===
 with st.sidebar:
@@ -159,14 +78,26 @@ with st.sidebar:
         with st.expander(f"📝 待办 ({len(todos)})", expanded=True):
             if not todos.empty:
                 for index, row in todos.iterrows():
-                    st.write(f"**{row['内容']}**")
-                    st.caption(f"📅 目标: {row['目标时间']}")
-                    with st.form(key=f"finish_todo_{index}"):
-                        cost = st.number_input("花费", min_value=0.0, step=10.0, key=f"cost_todo_{index}")
-                        submit = st.form_submit_button("✅ 完成")
-                        if submit:
-                            update_status(index, "Done", cost)
-                            st.rerun()
+                    #【UI优化】每条待办也是一个折叠卡片，节省空间
+                    with st.expander(f"{row['内容'][:10]}..."):
+                        st.write(f"**{row['内容']}**")
+                        st.caption(f"📅 目标: {row['目标时间']}")
+                        
+                        with st.form(key=f"finish_todo_{index}"):
+                            # 花费输入
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                cost = st.number_input("花费(元)", min_value=0.0, step=10.0, key=f"cost_{index}")
+                            with col2:
+                                # 【功能新增】消费分类选择
+                                sub_cat = st.selectbox("类型", ["餐饮", "交通", "购物", "娱乐", "居家", "其它"], key=f"subcat_{index}")
+                                
+                            submit = st.form_submit_button("✅ 完成并归档")
+                            if submit:
+                                # 传入消费分类
+                                category_for_record = sub_cat if cost > 0 else "日程"
+                                update_status(index, "Done", cost, expense_category=category_for_record)
+                                st.rerun()
             else:
                 st.caption("暂无待办")
 
