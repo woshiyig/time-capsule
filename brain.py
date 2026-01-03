@@ -110,21 +110,68 @@ def process_input(text):
     if is_future:
         category = "待办"
     else:
+        # 1. 规则初步判断
+        rule_category = None
         if any(k in text for k in finance_keywords):
-            category = "财务" 
+            rule_category = "财务" 
         elif parsed_date or any(k in text for k in schedule_keywords):
-            category = "日程"
+            rule_category = "日程"
         elif any(k in text for k in idea_keywords):
-            category = "创意"
+            rule_category = "创意"
         elif any(k in text for k in todo_keywords):
-            category = "待办"
+            rule_category = "待办"
+        
+        # 2. AI 辅助校验 (如果规则无法确定或为了更精准)
+        if not rule_category or len(text) > 10:
+            category = llm_classify(text, rule_category)
         else:
-            category = "创意"
+            category = rule_category if rule_category else "创意"
 
     status = "Done" if category in ["财务", "日程"] else "Pending"
     
     save_record(category, text, parsed_date, status=status)
     return category, parsed_date
+
+def llm_classify(text, rule_suggested=None):
+    """使用 AI 进行智能分类"""
+    # 从 st.sidebar 获取配置，如果没配置则使用默认/rule
+    api_key = st.session_state.get("api_key", os.getenv("SILICONFLOW_API_KEY", "sk-slmttbyivskikjlkqccrozdlywchgksvprulgajqjsaaiknn"))
+    base_url = st.session_state.get("base_url", "https://api.siliconflow.cn/v1")
+    model_name = st.session_state.get("model_name", "deepseek-ai/DeepSeek-V3")
+    
+    if not api_key:
+        return rule_suggested if rule_suggested else "创意"
+        
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key, base_url=base_url)
+        
+        prompt = f"""请将以下用户输入分类为以下四种之一：[待办, 日程, 创意, 财务]
+        
+用户输入："{text}"
+规则建议：{rule_suggested}
+
+分类标准：
+- 待办：需要去做的事情，但没有具体时间点，或者是一个明确的任务。
+- 日程：在特定时间发生的事件，或者是已经完成的经历描述。
+- 创意：想法、灵感、感悟、评价、笔记。
+- 财务：涉及消费、购买、金钱、预算的内容。
+
+只需回复分类名称（两个字），不要有任何其他文字。"""
+
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=10
+        )
+        ai_choice = response.choices[0].message.content.strip()
+        if ai_choice in ["待办", "日程", "创意", "财务"]:
+            return ai_choice
+    except Exception as e:
+        print(f"LLM Classify error: {e}")
+    
+    return rule_suggested if rule_suggested else "创意"
 
 def get_report_data(period="month"):
     """获取用于生成报告的数据"""
@@ -310,11 +357,30 @@ with st.sidebar:
         ideas = df[ (df["状态"] == "Pending") & (df["分类"] == "创意") ]
         with st.expander(f"💡 创意 ({len(ideas)})", expanded=True):
             if not ideas.empty:
-                 for index, row in ideas.iterrows():
+                for index, row in ideas.iterrows():
                     st.write(f"**{row['内容']}**")
-                    if st.button("✨ 落地", key=f"finish_idea_{index}"):
-                        update_status(index, "Done")
-                        st.rerun()
+                    col_idea1, col_idea2 = st.columns([1, 1])
+                    with col_idea1:
+                        if st.button("✨ 落地", key=f"finish_idea_{index}"):
+                            update_status(index, "Done")
+                            st.rerun()
+                    with col_idea2:
+                        if st.button("🧠 深度思考", key=f"deep_think_{index}"):
+                            with st.spinner("AI 正在深度解构中..."):
+                                from time_capsule_agent import TimeCapsuleAgent
+                                agent = TimeCapsuleAgent()
+                                analysis = agent.analyze_idea(row['内容'])
+                                st.session_state[f"idea_analysis_{index}"] = analysis
+                                st.rerun()
+                    
+                    if f"idea_analysis_{index}" in st.session_state:
+                         with st.expander("🧐 深度分析结果", expanded=True):
+                             res = st.session_state[f"idea_analysis_{index}"]
+                             st.info(f"状态: {res.get('status')}")
+                             st.markdown(res.get('message'))
+                             if st.button("关闭分析", key=f"close_analysis_{index}"):
+                                 del st.session_state[f"idea_analysis_{index}"]
+                                 st.rerun()
             else:
                 st.caption("暂无创意")
 
@@ -337,6 +403,33 @@ with st.sidebar:
                     st.text(f"• -{cost}元: {row['内容']}")
             else:
                 st.caption("暂无消费")
+        
+        # --- 5. AI 智能建议 (NEW) ---
+        st.divider()
+        st.subheader("🤖 AI 智能建议")
+        import json
+        SUGGESTIONS_FILE = "ai_suggestions.json"
+        if os.path.exists(SUGGESTIONS_FILE):
+             try:
+                 with open(SUGGESTIONS_FILE, 'r') as f:
+                     s_data = json.load(f)
+                 suggestions = s_data.get("suggestions", [])
+                 if suggestions:
+                     for s in suggestions:
+                         with st.container(border=True):
+                             st.markdown(s['content'])
+                             if s['type'] == "todo":
+                                 if st.button("➕ 转为待办", key=f"sug_to_todo_{s['id']}"):
+                                     process_input(f"{s['content']} (来自AI建议)")
+                                     st.success("已添加至待办！")
+                                     st.rerun()
+                 else:
+                     st.caption("暂无建议，继续保持良好的记录习惯吧！")
+             except Exception as e:
+                 st.caption(f"建议加载失败: {e}")
+        else:
+             st.caption("AI 正在分析你的数据，建议稍后同步...")
+    
     
     st.divider()
     with st.expander("⚙️ AI 设置"):
@@ -420,21 +513,21 @@ with tab1:
     with input_col1:
         # 左侧: 模式切换按钮
         if st.session_state.input_mode == "text":
-            if st.button("🎤", key="voice_toggle", use_container_width=True):
+            if st.button("🎤", key="voice_toggle", width="stretch"):
                 st.session_state.input_mode = "voice"
                 st.rerun()
         elif st.session_state.input_mode == "voice":
-            if st.button("⌨️", key="text_toggle", use_container_width=True):
+            if st.button("⌨️", key="text_toggle", width="stretch"):
                 st.session_state.input_mode = "text"
                 st.rerun()
         else:  # file mode
-            if st.button("⌨️", key="back_to_text", use_container_width=True):
+            if st.button("⌨️", key="back_to_text", width="stretch"):
                 st.session_state.input_mode = "text"
                 st.rerun()
     
     with input_col3:
         # 右侧: 文件上传切换
-        if st.button("➕", key="file_toggle", use_container_width=True):
+        if st.button("➕", key="file_toggle", width="stretch"):
             if st.session_state.input_mode == "file":
                 st.session_state.input_mode = "text"
             else:
@@ -563,7 +656,7 @@ with tab2:
         if search_term:
             search_result = df[df["内容"].str.contains(search_term, case=False, na=False)]
             if not search_result.empty:
-                st.dataframe(search_result, use_container_width=True)
+                st.dataframe(search_result, width="stretch")
             else:
                 st.info("没找到相关记录。")
         st.divider()
@@ -603,7 +696,7 @@ with tab2:
                         order=alt.Order("关联花销", sort="descending"),
                         color=alt.value("black") 
                      )
-                     st.altair_chart(pie + text, use_container_width=True)
+                     st.altair_chart(pie + text, width="stretch")
 
             with col2:
                 st.bar_chart(finance_df, x="记录时间", y="关联花销")
@@ -629,7 +722,7 @@ with tab2:
         if not schedule_df.empty:
             st.dataframe(
                 schedule_df[["目标时间", "内容", "记录时间"]].sort_values("目标时间", ascending=False),
-                use_container_width=True
+                width="stretch"
             )
         else:
             st.info("暂无历史日程记录")

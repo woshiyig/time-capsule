@@ -124,7 +124,6 @@ class TimeCapsuleAgent:
         """
         深度分析创意
         
-        调用 deep_thinking 工作流
         """
         return self.trigger_workflow("deep_thinking", {
             "type": "idea_analysis",
