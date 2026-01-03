@@ -332,7 +332,8 @@ with st.sidebar:
         st.caption("如果要生成AI报告，请配置：")
         api_key = st.text_input("API Key", value="sk-9f11070d9ff144c9a5fcf92bd84a70e7", type="password", help="OpenAI / DeepSeek / Kimi Key")
         base_url = st.text_input("Base URL", value="https://api.deepseek.com", help="例如 https://api.moonshot.cn/v1")
-        model_name = st.text_input("Model Name", value="deepseek-chat", help="例如 gpt-3.5-turbo, moonshot-v1-8k, deepseek-chat")
+        model_name = st.text_input("Model Name", value="deepseek-chat", help="LLM 模型名")
+        asr_model_name = st.text_input("ASR Model Name", value="whisper-1", help="语音转文字模型 (STT), 如 whisper-1, sensevoice-v1")
 
 # === 主界面 ===
 
@@ -345,6 +346,46 @@ with tab1:
     # 渲染历史消息
     for message in st.session_state.messages:
         render_msg(message["role"], message["content"])
+
+    # [NEW] 语音录入
+    # 注意：st.audio_input 返回一个 UploadedFile 对象
+    audio_value = st.audio_input("🎤 语音输入 (点击录音)")
+
+    if audio_value:
+        # 处理录音
+        if not api_key:
+             st.warning("⚠️ 请先在侧边栏配置 API Key 以使用语音转文字。")
+        else:
+             with st.spinner("🎧 正在听写..."):
+                try:
+                    # 使用 OpenAI 兼容接口进行转写
+                    # 注意：如果用 SiliconFlow，通常模型是 'pro/sensevoice-v1' 或 'whisper-1'，取决于厂商
+                    # 这里会使用侧边栏配置的 'ASR Model Name'
+                    client = OpenAI(api_key=api_key, base_url=base_url)
+                    transcription = client.audio.transcriptions.create(
+                        model=asr_model_name, # 使用配置的模型
+                        file=audio_value
+                    )
+                    transcript_text = transcription.text
+                    
+                    if transcript_text:
+                        # 转换成功，视为用户输入
+                        # 1. 渲染用户消息
+                        render_msg("user", transcript_text)
+                        st.session_state.messages.append({"role": "user", "content": transcript_text})
+
+                        # 2. 处理意图
+                        category, target_time = process_input(transcript_text)
+                        time_str = f" (时间: {target_time.strftime('%Y-%m-%d %H:%M')})" if target_time else ""
+                        response = f"✅ 已记录到 **[{category}]**{time_str}"
+                        
+                        # 3. 渲染机器回复
+                        render_msg("assistant", response)
+                        st.session_state.messages.append({"role": "assistant", "content": response})
+                        st.rerun() # 刷新以显示最新状态
+                    
+                except Exception as e:
+                    st.error(f"语音识别失败: {e}")
 
     prompt = st.chat_input("输入你的想法...")
 
