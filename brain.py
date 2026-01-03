@@ -45,13 +45,20 @@ def save_record(category, content, target_time=None, status="Pending", cost=0.0)
     df.to_csv(MEMORY_FILE, mode='a', header=not os.path.exists(MEMORY_FILE), index=False)
     return new_record
 
-def update_status(index, new_status, cost=0.0, expense_category="财务"):
-    """更新某条记录的状态"""
+def update_status(index, new_status, expense_list=None):
+    """更新某条记录的状态
+    expense_list: [{"cost": 10.0, "category": "餐饮"}, ...]
+    """
+    if expense_list is None:
+        expense_list = []
+        
     df = pd.read_csv(MEMORY_FILE)
     
     # 1. 更新状态
+    # 计算总花销用于关联
+    total_cost = sum(item['cost'] for item in expense_list)
     df.at[index, "状态"] = new_status
-    df.at[index, "关联花销"] = cost
+    df.at[index, "关联花销"] = total_cost
     
     # 2. 待办完成后，自动转为 "日程"
     if df.at[index, "分类"] == "待办" and new_status == "Done":
@@ -59,13 +66,15 @@ def update_status(index, new_status, cost=0.0, expense_category="财务"):
             
     df.to_csv(MEMORY_FILE, index=False)
     
-    # 3. 如果产生了花销，额外追加一条财务明细 (使用用户选择的分类)
-    if cost > 0:
-        original_content = df.at[index, "内容"]
-        # 备注里写明来源
-        save_record(expense_category, f"{original_content} (来自待办)", status="Done", cost=cost)
+    # 3. 记录多笔花销
+    original_content = df.at[index, "内容"]
+    for item in expense_list:
+        cost = item['cost']
+        cat = item['category']
+        if cost > 0:
+            save_record(cat, f"{original_content} (来自待办)", status="Done", cost=cost)
 
-# ... (process_input 省略，未变) ...
+# ... (process_input 省略) ...
 
 # === 侧边栏：分类管理 ===
 with st.sidebar:
@@ -78,25 +87,40 @@ with st.sidebar:
         with st.expander(f"📝 待办 ({len(todos)})", expanded=True):
             if not todos.empty:
                 for index, row in todos.iterrows():
-                    #【UI优化】每条待办也是一个折叠卡片，节省空间
                     with st.expander(f"{row['内容'][:10]}..."):
                         st.write(f"**{row['内容']}**")
                         st.caption(f"📅 目标: {row['目标时间']}")
                         
-                        with st.form(key=f"finish_todo_{index}"):
-                            # 花费输入
-                            col1, col2 = st.columns(2)
+                        # --- 动态添加花销逻辑 ---
+                        # 初始化该任务的花销行数
+                        count_key = f"expense_count_{index}"
+                        if count_key not in st.session_state:
+                            st.session_state[count_key] = 1
+                            
+                        # 动态生成输入框
+                        expenses_data = [] # 收集输入的数据
+                        
+                        for i in range(st.session_state[count_key]):
+                            col1, col2 = st.columns([1, 1.5]) 
                             with col1:
-                                cost = st.number_input("花费(元)", min_value=0.0, step=10.0, key=f"cost_{index}")
+                                c = st.number_input(f"金额{i+1}", min_value=0.0, step=10.0, key=f"cost_{index}_{i}")
                             with col2:
-                                # 【功能新增】消费分类选择
-                                sub_cat = st.selectbox("类型", ["餐饮", "交通", "购物", "娱乐", "居家", "其它"], key=f"subcat_{index}")
-                                
-                            submit = st.form_submit_button("✅ 完成并归档")
-                            if submit:
-                                # 传入消费分类
-                                category_for_record = sub_cat if cost > 0 else "日程"
-                                update_status(index, "Done", cost, expense_category=category_for_record)
+                                t = st.selectbox(f"类型{i+1}", ["餐饮", "交通", "购物", "娱乐", "居家", "其它"], key=f"type_{index}_{i}")
+                            expenses_data.append({"cost": c, "category": t})
+
+                        # 按钮区
+                        b_col1, b_col2 = st.columns([1, 1])
+                        with b_col1:
+                            if st.button("➕ 加一项", key=f"add_btn_{index}"):
+                                st.session_state[count_key] += 1
+                                st.rerun()
+                        with b_col2:
+                            if st.button("✅ 完成归档", key=f"done_btn_{index}"):
+                                # 收集只有金额大于0的项
+                                valid_expenses = [e for e in expenses_data if e['cost'] > 0]
+                                update_status(index, "Done", expense_list=valid_expenses)
+                                # 清理 session state
+                                del st.session_state[count_key]
                                 st.rerun()
             else:
                 st.caption("暂无待办")
