@@ -328,12 +328,13 @@ with tab1:
     for message in st.session_state.messages:
         # 按照用户新要求：完全模仿微信风格 (User Right, AI Left)
         if message["role"] == "user":
-            col1, col2 = st.columns([0.15, 0.85])
+            col1, col2 = st.columns([0.2, 0.8])
             with col2: # User on Right
                 with st.chat_message("user"):
-                    st.write(message["content"])
+                    # 使用 HTML 强制右对齐文本，模拟微信气泡
+                    st.markdown(f"<div style='text-align: right'>{message['content']}</div>", unsafe_allow_html=True)
         else:
-            col1, col2 = st.columns([0.85, 0.15]) 
+            col1, col2 = st.columns([0.8, 0.2]) 
             with col1: # AI on Left
                 with st.chat_message("assistant"):
                     st.write(message["content"])
@@ -342,10 +343,10 @@ with tab1:
 
     if prompt:
         # 用户输入 (右边)
-        col_u1, col_u2 = st.columns([0.15, 0.85])
+        col_u1, col_u2 = st.columns([0.2, 0.8])
         with col_u2:
             with st.chat_message("user"):
-                st.write(prompt)
+                st.markdown(f"<div style='text-align: right'>{prompt}</div>", unsafe_allow_html=True)
         st.session_state.messages.append({"role": "user", "content": prompt})
 
         category, target_time = process_input(prompt)
@@ -354,7 +355,7 @@ with tab1:
         response = f"✅ 已记录到 **[{category}]**{time_str}"
         
         # 机器回复 (左边)
-        col_a1, col_a2 = st.columns([0.85, 0.15])
+        col_a1, col_a2 = st.columns([0.8, 0.2])
         with col_a1:
             with st.chat_message("assistant"):
                 st.write(response)
