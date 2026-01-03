@@ -48,6 +48,17 @@ def save_record(category, content, target_time=None, status="Pending", cost=0.0)
     }
     df = pd.DataFrame([new_record])
     df.to_csv(MEMORY_FILE, mode='a', header=not os.path.exists(MEMORY_FILE), index=False)
+    
+    # [NEW] 自动同步到 AI as Me 知识库
+    try:
+        from time_capsule_agent import auto_sync_hook
+        # 在后台异步执行，避免阻塞 UI
+        import threading
+        threading.Thread(target=auto_sync_hook, daemon=True).start()
+    except Exception as e:
+        # 同步失败不影响主流程
+        print(f"Auto-sync warning: {e}")
+    
     return new_record
 
 def update_status(index, new_status, expense_list=None):
