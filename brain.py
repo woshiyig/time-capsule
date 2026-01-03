@@ -256,48 +256,6 @@ if "messages" not in st.session_state:
 with st.sidebar:
     st.header("🗂️ 分类管理")
     df = load_memory()
-    # ... (省略中间已有代码) ...
-        # (保持原有的侧边栏逻辑不变，此处仅示意，实际替换时需要保留原代码)
-        # Note: ReplaceFileContent will match TargetContent exactly. 
-        # Since I'm targeting a large block including the display loop, I should be careful.
-        # Let's target the SECTION AFTER sidebar and BEFORE logic.
-        pass
-
-# ... (We need to jump to the UI part) ...
-
-# === 主界面 ===
-
-st.title("💊 时间胶囊 (Time Capsule)")
-
-tab1, tab2 = st.tabs(["💬 对话", "📊 报表"])
-
-# --- 标签页 1: 聊天 ---
-with tab1:
-    # 渲染历史消息
-    for message in st.session_state.messages:
-        render_msg(message["role"], message["content"])
-
-    prompt = st.chat_input("输入你的想法...")
-
-    if prompt:
-        # 用户输入 (渲染)
-        render_msg("user", prompt)
-        st.session_state.messages.append({"role": "user", "content": prompt})
-
-        category, target_time = process_input(prompt)
-
-        time_str = f" (时间: {target_time.strftime('%Y-%m-%d %H:%M')})" if target_time else ""
-        response = f"✅ 已记录到 **[{category}]**{time_str}"
-        
-        # 机器回复 (渲染)
-        render_msg("assistant", response)
-        st.session_state.messages.append({"role": "assistant", "content": response})
-        st.rerun()
-
-# === 侧边栏：分类管理 & 设置 ===
-with st.sidebar:
-    st.header("🗂️ 分类管理")
-    df = load_memory()
     
     if not df.empty:
         # --- 1. 待办 (Pending) ---
@@ -368,7 +326,7 @@ with st.sidebar:
                     st.text(f"• -{cost}元: {row['内容']}")
             else:
                 st.caption("暂无消费")
-
+    
     st.divider()
     with st.expander("⚙️ AI 设置"):
         st.caption("如果要生成AI报告，请配置：")
@@ -384,28 +342,15 @@ tab1, tab2 = st.tabs(["💬 对话", "📊 报表"])
 
 # --- 标签页 1: 聊天 ---
 with tab1:
+    # 渲染历史消息
     for message in st.session_state.messages:
-        # 按照用户新要求：完全模仿微信风格 (User Right, AI Left)
-        if message["role"] == "user":
-            col1, col2 = st.columns([0.2, 0.8])
-            with col2: # User on Right
-                with st.chat_message("user"):
-                    # 使用 HTML 强制右对齐文本，模拟微信气泡
-                    st.markdown(f"<div style='text-align: right'>{message['content']}</div>", unsafe_allow_html=True)
-        else:
-            col1, col2 = st.columns([0.8, 0.2]) 
-            with col1: # AI on Left
-                with st.chat_message("assistant"):
-                    st.write(message["content"])
+        render_msg(message["role"], message["content"])
 
     prompt = st.chat_input("输入你的想法...")
 
     if prompt:
-        # 用户输入 (右边)
-        col_u1, col_u2 = st.columns([0.2, 0.8])
-        with col_u2:
-            with st.chat_message("user"):
-                st.markdown(f"<div style='text-align: right'>{prompt}</div>", unsafe_allow_html=True)
+        # 用户输入 (渲染)
+        render_msg("user", prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
 
         category, target_time = process_input(prompt)
@@ -413,11 +358,8 @@ with tab1:
         time_str = f" (时间: {target_time.strftime('%Y-%m-%d %H:%M')})" if target_time else ""
         response = f"✅ 已记录到 **[{category}]**{time_str}"
         
-        # 机器回复 (左边)
-        col_a1, col_a2 = st.columns([0.8, 0.2])
-        with col_a1:
-            with st.chat_message("assistant"):
-                st.write(response)
+        # 机器回复 (渲染)
+        render_msg("assistant", response)
         st.session_state.messages.append({"role": "assistant", "content": response})
         st.rerun()
 
