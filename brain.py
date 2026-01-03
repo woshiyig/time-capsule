@@ -330,10 +330,10 @@ with st.sidebar:
     st.divider()
     with st.expander("⚙️ AI 设置"):
         st.caption("如果要生成AI报告，请配置：")
-        api_key = st.text_input("API Key", value="sk-9f11070d9ff144c9a5fcf92bd84a70e7", type="password", help="OpenAI / DeepSeek / Kimi Key")
-        base_url = st.text_input("Base URL", value="https://api.deepseek.com", help="例如 https://api.moonshot.cn/v1")
-        model_name = st.text_input("Model Name", value="deepseek-chat", help="LLM 模型名")
-        asr_model_name = st.text_input("ASR Model Name", value="whisper-1", help="语音转文字模型 (STT), 如 whisper-1, sensevoice-v1")
+        api_key = st.text_input("API Key", value="sk-slmttbyivskikjlkqccrozdlywchgksvprulgajqjsaaiknn", type="password", help="OpenAI / DeepSeek / SiliconFlow Key")
+        base_url = st.text_input("Base URL", value="https://api.siliconflow.cn/v1", help="例如 https://api.siliconflow.cn/v1")
+        model_name = st.text_input("Model Name", value="deepseek-ai/DeepSeek-V3", help="LLM 模型名, 如 deepseek-ai/DeepSeek-V3")
+        asr_model_name = st.text_input("ASR Model Name", value="FunAudioLLM/SenseVoiceSmall", help="语音转文字模型, 如 FunAudioLLM/SenseVoiceSmall")
 
 # === 主界面 ===
 
