@@ -3,7 +3,140 @@ import dateparser
 from dateparser.search import search_dates
 import pandas as pd
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
+# [NEW] AI 支持
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
+
+# ================= 配置区 =================
+MEMORY_FILE = 'memory.csv'
+
+# ================= 核心功能函数 =================
+# ... (init_memory, load_memory, save_record, update_status, process_input 保持不变) ...
+
+def get_report_data(period="month"):
+    """获取用于生成报告的数据"""
+    df = load_memory()
+    if df.empty:
+        return None
+        
+    df["记录时间"] = pd.to_datetime(df["记录时间"])
+    now = datetime.now()
+    
+    if period == "week":
+        start_date = now - timedelta(days=7)
+    elif period == "month":
+         start_date = now - timedelta(days=30)
+    elif period == "year":
+         start_date = now - timedelta(days=365)
+    else:
+        start_date = now - timedelta(days=30)
+
+    # 筛选时间范围内的记录
+    mask = df["记录时间"] > start_date
+    filtered_df = df[mask]
+    
+    if filtered_df.empty:
+        return "该时间段无记录。"
+
+    # 分类汇总
+    finance = filtered_df[ (filtered_df["分类"]=="财务") | (filtered_df["关联花销"] > 0) ]
+    total_cost = pd.to_numeric(finance["关联花销"]).sum() if not finance.empty else 0
+    
+    # 提取高亮内容
+    schedules = filtered_df[filtered_df["分类"] == "日程"]["内容"].tolist()
+    achievements = filtered_df[ (filtered_df["分类"] == "日程") & (filtered_df["内容"].str.contains("完成|Done", case=False)) ]["内容"].tolist()
+    ideas = filtered_df[filtered_df["分类"] == "创意"]["内容"].tolist()
+    
+    summary = f"""
+    【时间范围】: 近 {period}
+    【财务总支】: {total_cost} 元
+    【主要日程/成就】: {', '.join(schedules[:10])}...
+    【冒出的想法】: {', '.join(ideas[:5])}...
+    【详细流水】:
+    {filtered_df.to_string(index=False)}
+    """
+    return summary
+
+def call_ai_report(api_key, base_url, data_context, period):
+    """调用 AI 生成报告"""
+    if not OpenAI:
+        return "请先安装 openai 库 (pip install openai)"
+        
+    client = OpenAI(api_key=api_key, base_url=base_url)
+    
+    prompt = f"""
+    你是一个贴心的生活助手。请根据以下用户的近期生活数据，写一份生动、温暖且有洞察力的【{period}生活周报/月报】。
+    
+    要求：
+    1. 😃 语气轻松幽默，像老朋友一样。
+    2. 💰 分析财务状况（是否败家了？还是省钱小能手？）。
+    3. 📅 总结成就和忙碌的时刻。
+    4. 💡 点评用户的创意想法，给予鼓励。
+    5. 不要罗列数据，要写成文章。
+    
+    数据如下：
+    {data_context}
+    """
+    
+    try:
+        completion = client.chat.completions.create(
+            model="gpt-3.5-turbo", # 兼容大部分模型接口
+            messages=[
+                {"role": "system", "content": "You are a helpful life assistant."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        return completion.choices[0].message.content
+    except Exception as e:
+        return f"AI 调用失败: {str(e)}"
+
+# ================= 页面 UI =================
+# ... (样式设置保持不变) ...
+
+# === 侧边栏：分类管理 & 设置 ===
+with st.sidebar:
+    st.header("🗂️ 分类管理")
+    # ... (原有分类管理代码) ...
+    
+    st.divider()
+    with st.expander("⚙️ AI 设置"):
+        st.caption("如果要生成AI报告，请配置：")
+        api_key = st.text_input("API Key", type="password", help="OpenAI / DeepSeek / Kimi Key")
+        base_url = st.text_input("Base URL", value="https://api.deepseek.com", help="例如 https://api.moonshot.cn/v1")
+
+# ... (Tab 1 聊天 保持不变) ...
+
+# --- 标签页 2: 报表 ---
+with tab2:
+    # ... (原有财务/日程报表保持不变) ...
+    
+    st.divider()
+    st.subheader("🧠 AI 生活总结")
+    
+    col_p, col_b = st.columns([2, 1])
+    with col_p:
+        report_period = st.selectbox("选择周期", ["week", "month", "year"], format_func=lambda x: {"week":"本周", "month":"本月", "year":"今年"}[x])
+    with col_b:
+        st.write("") # Spacer
+        st.write("") 
+        gen_btn = st.button("✨ 生成 AI 报告")
+        
+    if gen_btn:
+        data_summary = get_report_data(report_period)
+        if not data_summary:
+            st.warning("这就尴尬了，这个时间段好像没有数据...")
+        elif not api_key:
+            st.info("💡 请先在左侧侧边栏【⚙️ AI 设置】中输入 API Key (支持 DeepSeek/Kimi 等)。")
+            with st.expander("或者复制以下数据发给 ChatGPT"):
+                st.code(f"请帮我写一份{report_period}总结，数据如下：\n{data_summary}")
+        else:
+            with st.spinner("AI 正在疯狂回忆中..."):
+                report_content = call_ai_report(api_key, base_url, data_summary, report_period)
+                st.markdown(report_content)
+
 
 # ================= 配置区 =================
 MEMORY_FILE = 'memory.csv'
