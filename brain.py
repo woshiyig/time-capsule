@@ -399,9 +399,10 @@ with tab1:
     for message in st.session_state.messages:
         render_msg(message["role"], message["content"])
 
-    # [NEW] 语音录入
-    # 注意：st.audio_input 返回一个 UploadedFile 对象
-    audio_value = st.audio_input("🎤 语音输入 (点击录音)")
+    # [NEW] 语音录入 - 仿微信风格 (折叠在底部)
+    # 使用 container + expander 模拟 "更多功能" 面板
+    with st.expander("🎙️ 点击展开语音录入", expanded=False):
+        audio_value = st.audio_input("点击麦克风开始说话...")
 
     if audio_value:
         # Prevent infinite reprocessing by checking file hash
