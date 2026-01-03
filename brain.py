@@ -203,7 +203,37 @@ st.markdown("""
 init_memory()
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    st.session_state.messages.append({"role": "assistant", "content": "你好！我是你的时间胶囊。把你的想法、安排和记忆交给我吧。💊"})
+    
+    # 尝试加载最近 3 天的历史记录
+    try:
+        df_history = load_memory()
+        if not df_history.empty:
+            df_history["记录时间"] = pd.to_datetime(df_history["记录时间"])
+            three_days_ago = datetime.now() - timedelta(days=3)
+            # 筛选最近3天的数据
+            recent_history = df_history[df_history["记录时间"] > three_days_ago].sort_values("记录时间")
+            
+            for _, row in recent_history.iterrows():
+                # 恢复用户输入
+                st.session_state.messages.append({"role": "user", "content": row["内容"]})
+                
+                # 恢复助手回复 (模拟)
+                time_str = ""
+                if pd.notna(row['目标时间']) and row['目标时间']:
+                     time_str = f" (时间: {row['目标时间']})"
+                
+                response = f"✅ 已记录到 **[{row['分类']}]**{time_str}"
+                st.session_state.messages.append({"role": "assistant", "content": response})
+                
+    except Exception as e:
+        print(f"History load error: {e}")
+
+    # 无论有无历史，都加上欢迎语 (或者根据是否有历史决定)
+    # 这里策略是：始终在最开始加欢迎语，或者最后。这里保持在最开始稍微自然点，或者如果有历史就不加了？
+    # 用户通常希望看到上下文。如果之前有对话，再跳出一个“你好”可能有点怪，但作为应用启动也正常。
+    # 为了区分，我们只在这次会话为空列表时（也就是第一次打开）做这件事。
+    if not st.session_state.messages:
+        st.session_state.messages.append({"role": "assistant", "content": "你好！我是你的时间胶囊。把你的想法、安排和记忆交给我吧。💊"})
 
 # === 侧边栏：分类管理 & 设置 ===
 with st.sidebar:
