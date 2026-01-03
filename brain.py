@@ -96,7 +96,10 @@ def process_input(text):
             category = "财务" 
         elif parsed_date or any(k in text for k in schedule_keywords):
             # 有时间或者有动词的过去事情 -> 日程
-            category = "日程" 
+            category = "日程"
+        elif any(k in text for k in idea_keywords):
+             # [优先判定] 如果有明显的创意词（比如"主意"），先判定为创意，防止被"做"等动词抢走
+            category = "创意"
         elif any(k in text for k in todo_keywords):
             # 明确的行动指令 -> 待办
             category = "待办"
