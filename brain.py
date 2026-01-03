@@ -335,6 +335,58 @@ with st.sidebar:
         model_name = st.text_input("Model Name", value="deepseek-ai/DeepSeek-V3", help="LLM 模型名, 如 deepseek-ai/DeepSeek-V3")
         asr_model_name = st.text_input("ASR Model Name", value="FunAudioLLM/SenseVoiceSmall", help="语音转文字模型, 如 FunAudioLLM/SenseVoiceSmall")
 
+    st.divider()
+    # [NEW] 数据维护：去重
+    if st.button("🧹 清理重复记录"):
+        df_clean = load_memory()
+        if not df_clean.empty:
+            original_count = len(df_clean)
+            
+            # 逻辑：即使内容相同，如果是正常录入，时间点应该不同。
+            # 机器循环导致的重复通常是短时间内（比如1分钟内）产生了多条相同内容。
+            
+            # 1. 转换时间类型
+            df_clean["记录时间_dt"] = pd.to_datetime(df_clean["记录时间"], errors='coerce')
+            
+            # 2. 排序
+            df_clean = df_clean.sort_values("记录时间_dt")
+            
+            # 3. 计算与上一条记录的时间差 (秒)
+            # grouped by content etc to only compare similar items? 
+            # 简单策略：如果 内容+分类+目标时间 相同，且时间间隔 < 60秒，视为重复
+            
+            df_clean["prev_content"] = df_clean["内容"].shift(1)
+            df_clean["prev_category"] = df_clean["分类"].shift(1)
+            df_clean["prev_time"] = df_clean["记录时间_dt"].shift(1)
+            
+            def is_duplicate(row):
+                if pd.isna(row["prev_time"]):
+                    return False
+                time_diff = (row["记录时间_dt"] - row["prev_time"]).total_seconds()
+                if (row["内容"] == row["prev_content"] and 
+                    row["分类"] == row["prev_category"] and 
+                    time_diff < 60): # 60秒内的重复内容
+                    return True
+                return False
+
+            df_clean["is_dup"] = df_clean.apply(is_duplicate, axis=1)
+            
+            # 筛选非重复
+            df_dedup = df_clean[~df_clean["is_dup"]].copy()
+            new_count = len(df_dedup)
+            
+            # 保存 (去掉临时列)
+            final_columns = ["记录时间", "分类", "内容", "目标时间", "状态", "关联花销"]
+            df_dedup = df_dedup[final_columns]
+            df_dedup.to_csv(MEMORY_FILE, index=False)
+            
+            removed_count = original_count - new_count
+            if removed_count > 0:
+                st.success(f"成功清理了 {removed_count} 条重复记录！")
+                st.rerun()
+            else:
+                st.info("没有发现短时间内的重复记录。")
+
 # === 主界面 ===
 
 st.title("💊 时间胶囊 (Time Capsule)")
