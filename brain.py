@@ -187,7 +187,9 @@ with st.sidebar:
         with st.expander("📅 近期日程", expanded=False):
             if not schedules.empty:
                 for _, row in schedules.iterrows():
-                    st.text(f"{row['目标时间'][:10]}: {row['内容']}")
+                    # 安全获取时间字符串，防止 NaN 报错
+                    date_str = str(row['目标时间']) if pd.notna(row['目标时间']) and row['目标时间'] != "" else str(row['记录时间'])
+                    st.text(f"• {date_str[:10]}: {row['内容']}")
             else:
                 st.caption("暂无日程")
 
