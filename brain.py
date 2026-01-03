@@ -283,7 +283,8 @@ with st.sidebar:
     st.divider()
     with st.expander("⚙️ AI 设置"):
         st.caption("如果要生成AI报告，请配置：")
-        api_key = st.text_input("API Key", type="password", help="OpenAI / DeepSeek / Kimi Key")
+        # [Security Note] 也就是用户要求的直接配置。通常建议用 st.secrets，但为了方便演示直接预填
+        api_key = st.text_input("API Key", value="sk-9f11070d9ff144c9a5fcf92bd84a70e7", type="password", help="OpenAI / DeepSeek / Kimi Key")
         base_url = st.text_input("Base URL", value="https://api.deepseek.com", help="例如 https://api.moonshot.cn/v1")
 
 # === 主界面 ===
