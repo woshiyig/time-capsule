@@ -434,13 +434,15 @@ with tab1:
         # 中间: 根据模式显示输入组件
         if st.session_state.input_mode == "text":
             # 文字输入模式
-            # 初始化上次处理的输入
+            # 初始化上次处理的输入和计数器
             if "last_processed_input" not in st.session_state:
                 st.session_state.last_processed_input = ""
+            if "input_counter" not in st.session_state:
+                st.session_state.input_counter = 0
             
             user_input = st.text_input(
                 "输入你的想法...", 
-                key="text_input_field",
+                key=f"text_input_field_{st.session_state.input_counter}",  # 动态key实现清空
                 label_visibility="collapsed",
                 placeholder="输入你的想法..."
             )
@@ -458,6 +460,10 @@ with tab1:
                 
                 render_msg("assistant", response)
                 st.session_state.messages.append({"role": "assistant", "content": response})
+                
+                # 清空输入框: 递增计数器，下次rerun会用新key创建新的空白输入框
+                st.session_state.input_counter += 1
+                st.session_state.last_processed_input = ""  # 重置
                 st.rerun()
         
         elif st.session_state.input_mode == "voice":
