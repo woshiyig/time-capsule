@@ -54,14 +54,10 @@ def update_status(index, new_status, cost=0.0):
     df.at[index, "关联花销"] = cost
     
     # 2. 【核心逻辑变更】: 待办完成后，自动转为 "日程" (如果不涉及花销)
-    # 如果原本是待办，现在完成了
     if df.at[index, "分类"] == "待办" and new_status == "Done":
         if cost > 0:
-            # 如果花了钱，其实它应该变成一条财务记录，或者我们保留原来的记录但标记为"财务"
-            # 这里我们选择：把原记录改为"日程"（表示发生了），额外加一条"财务"记录（表示花钱了）
             df.at[index, "分类"] = "日程"
         else:
-            # 如果没花钱，直接变身日程
             df.at[index, "分类"] = "日程"
             
     df.to_csv(MEMORY_FILE, index=False)
@@ -80,9 +76,11 @@ def process_input(text):
     
     now = datetime.now()
     category = "想法"
+    # 关键词定义
     finance_keywords = ["买", "花", "元", "块", "钱", "支付", "花费", "预算"]
-    # 日程关键词在未来不再起作用，只用来判断过去
-    schedule_keywords = ["开会", "去", "见面", "预约", "参加", "高铁", "飞机", "请"] 
+    schedule_keywords = ["开会", "去", "见面", "预约", "参加", "高铁", "飞机", "请", "约"]
+    todo_keywords = ["记得", "需要", "办", "做", "带"]
+    idea_keywords = ["我想", "主意", "灵感", "觉得", "可能", "不错", "建议"]
 
     is_future = False
     if parsed_date and parsed_date > now:
@@ -93,14 +91,18 @@ def process_input(text):
         # [规则] 所有未来的事 -> 待办
         category = "待办"
     else:
-        # [规则] 过去的事情
+        # [规则] 过去/现在的事情
         if any(k in text for k in finance_keywords):
             category = "财务" 
         elif parsed_date or any(k in text for k in schedule_keywords):
             # 有时间或者有动词的过去事情 -> 日程
             category = "日程" 
+        elif any(k in text for k in todo_keywords):
+            # 明确的行动指令 -> 待办
+            category = "待办"
         else:
-            category = "待办" # 如果既没时间也没花钱，可能只是随手记的备忘
+            # 既不是日程，也不是财务，也没有待办关键词 -> 归为 [创意]
+            category = "创意"
 
     # 默认状态
     status = "Done" if category in ["财务", "日程"] else "Pending"
