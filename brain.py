@@ -154,7 +154,7 @@ def get_report_data(period="month"):
     """
     return summary
 
-def call_ai_report(api_key, base_url, data_context, period):
+def call_ai_report(api_key, base_url, model_name, data_context, period):
     """调用 AI 生成报告"""
     if not OpenAI:
         return "请先安装 openai 库 (pip install openai)"
@@ -176,7 +176,7 @@ def call_ai_report(api_key, base_url, data_context, period):
     
     try:
         completion = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model=model_name,
             messages=[
                 {"role": "system", "content": "You are a helpful life assistant."},
                 {"role": "user", "content": prompt}
@@ -283,9 +283,9 @@ with st.sidebar:
     st.divider()
     with st.expander("⚙️ AI 设置"):
         st.caption("如果要生成AI报告，请配置：")
-        # [Security Note] 也就是用户要求的直接配置。通常建议用 st.secrets，但为了方便演示直接预填
         api_key = st.text_input("API Key", value="sk-9f11070d9ff144c9a5fcf92bd84a70e7", type="password", help="OpenAI / DeepSeek / Kimi Key")
         base_url = st.text_input("Base URL", value="https://api.deepseek.com", help="例如 https://api.moonshot.cn/v1")
+        model_name = st.text_input("Model Name", value="deepseek-chat", help="例如 gpt-3.5-turbo, moonshot-v1-8k, deepseek-chat")
 
 # === 主界面 ===
 
@@ -371,7 +371,7 @@ with tab2:
                     st.code(f"请帮我写一份{report_period}总结，数据如下：\n{data_summary}")
             else:
                 with st.spinner("AI 正在疯狂回忆中..."):
-                    report_content = call_ai_report(api_key, base_url, data_summary, report_period)
+                    report_content = call_ai_report(api_key, base_url, model_name, data_summary, report_period)
                     st.markdown(report_content)
 
     else:
