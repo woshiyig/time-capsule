@@ -326,14 +326,26 @@ tab1, tab2 = st.tabs(["💬 对话", "📊 报表"])
 # --- 标签页 1: 聊天 ---
 with tab1:
     for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
+        # 按照用户要求：我输入的在左边 (Left)，机器在右边 (Right)
+        if message["role"] == "user":
+            col1, col2 = st.columns([0.85, 0.15])
+            with col1:
+                with st.chat_message("user"):
+                    st.write(message["content"])
+        else:
+            col1, col2 = st.columns([0.15, 0.85])
+            with col2:
+                with st.chat_message("assistant"):
+                    st.write(message["content"])
 
     prompt = st.chat_input("输入你的想法...")
 
     if prompt:
-        with st.chat_message("user"):
-            st.write(prompt)
+        # 用户输入 (左边)
+        col_u1, col_u2 = st.columns([0.85, 0.15])
+        with col_u1:
+            with st.chat_message("user"):
+                st.write(prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
 
         category, target_time = process_input(prompt)
@@ -341,8 +353,11 @@ with tab1:
         time_str = f" (时间: {target_time.strftime('%Y-%m-%d %H:%M')})" if target_time else ""
         response = f"✅ 已记录到 **[{category}]**{time_str}"
         
-        with st.chat_message("assistant"):
-            st.write(response)
+        # 机器回复 (右边)
+        col_a1, col_a2 = st.columns([0.15, 0.85])
+        with col_a2:
+            with st.chat_message("assistant"):
+                st.write(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
         st.rerun()
 
