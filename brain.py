@@ -352,40 +352,51 @@ with tab1:
     audio_value = st.audio_input("🎤 语音输入 (点击录音)")
 
     if audio_value:
-        # 处理录音
-        if not api_key:
-             st.warning("⚠️ 请先在侧边栏配置 API Key 以使用语音转文字。")
+        # Prevent infinite reprocessing by checking file hash
+        import hashlib
+        audio_bytes = audio_value.getvalue()
+        file_hash = hashlib.md5(audio_bytes).hexdigest()
+        
+        if "processed_audio_hashes" not in st.session_state:
+            st.session_state.processed_audio_hashes = set()
+            
+        if file_hash in st.session_state.processed_audio_hashes:
+            # Already processed this file
+            pass 
         else:
-             with st.spinner("🎧 正在听写..."):
-                try:
-                    # 使用 OpenAI 兼容接口进行转写
-                    # 注意：如果用 SiliconFlow，通常模型是 'pro/sensevoice-v1' 或 'whisper-1'，取决于厂商
-                    # 这里会使用侧边栏配置的 'ASR Model Name'
-                    client = OpenAI(api_key=api_key, base_url=base_url)
-                    transcription = client.audio.transcriptions.create(
-                        model=asr_model_name, # 使用配置的模型
-                        file=audio_value
-                    )
-                    transcript_text = transcription.text
-                    
-                    if transcript_text:
-                        # 转换成功，视为用户输入
-                        # 1. 渲染用户消息
-                        render_msg("user", transcript_text)
-                        st.session_state.messages.append({"role": "user", "content": transcript_text})
-
-                        # 2. 处理意图
-                        category, target_time = process_input(transcript_text)
-                        time_str = f" (时间: {target_time.strftime('%Y-%m-%d %H:%M')})" if target_time else ""
-                        response = f"✅ 已记录到 **[{category}]**{time_str}"
+            # New audio file
+            if not api_key:
+                 st.warning("⚠️ 请先在侧边栏配置 API Key 以使用语音转文字。")
+            else:
+                 with st.spinner("🎧 正在听写..."):
+                    try:
+                        client = OpenAI(api_key=api_key, base_url=base_url)
+                        transcription = client.audio.transcriptions.create(
+                            model=asr_model_name, 
+                            file=audio_value
+                        )
+                        transcript_text = transcription.text
                         
-                        # 3. 渲染机器回复
-                        render_msg("assistant", response)
-                        st.session_state.messages.append({"role": "assistant", "content": response})
-                        st.rerun() # 刷新以显示最新状态
-                    
-                except Exception as e:
-                    st.error(f"语音识别失败: {e}")
+                        if transcript_text:
+                            # 1. 渲染用户消息
+                            render_msg("user", transcript_text)
+                            st.session_state.messages.append({"role": "user", "content": transcript_text})
+
+                            # 2. 处理意图
+                            category, target_time = process_input(transcript_text)
+                            time_str = f" (时间: {target_time.strftime('%Y-%m-%d %H:%M')})" if target_time else ""
+                            response = f"✅ 已记录到 **[{category}]**{time_str}"
+                            
+                            # 3. 渲染机器回复
+                            render_msg("assistant", response)
+                            st.session_state.messages.append({"role": "assistant", "content": response})
+                            
+                            # 4. Mark as processed
+                            st.session_state.processed_audio_hashes.add(file_hash)
+                            st.rerun() 
+                        
+                    except Exception as e:
+                        st.error(f"语音识别失败: {e}")
 
     prompt = st.chat_input("输入你的想法...")
 
