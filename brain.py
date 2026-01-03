@@ -199,6 +199,27 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+def render_msg(role, content):
+    """渲染微信风格的消息"""
+    if role == "user":
+        st.markdown(f"""
+        <div style="display: flex; justify-content: flex-end; align-items: flex-start; margin-bottom: 20px;">
+            <div style="background-color: #95ec69; color: black; padding: 10px 15px; border-radius: 8px; margin-right: 10px; max-width: 70%; text-align: left; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                {content}
+            </div>
+            <div style="font-size: 28px; line-height: 1;">🧑‍💻</div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <div style="display: flex; justify-content: flex-start; align-items: flex-start; margin-bottom: 20px;">
+            <div style="font-size: 28px; margin-right: 10px; line-height: 1;">💊</div>
+            <div style="background-color: #ffffff; border: 1px solid #f0f0f0; color: black; padding: 10px 15px; border-radius: 8px; max-width: 70%; text-align: left; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                {content}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
 # 初始化
 init_memory()
 if "messages" not in st.session_state:
@@ -228,12 +249,50 @@ if "messages" not in st.session_state:
     except Exception as e:
         print(f"History load error: {e}")
 
-    # 无论有无历史，都加上欢迎语 (或者根据是否有历史决定)
-    # 这里策略是：始终在最开始加欢迎语，或者最后。这里保持在最开始稍微自然点，或者如果有历史就不加了？
-    # 用户通常希望看到上下文。如果之前有对话，再跳出一个“你好”可能有点怪，但作为应用启动也正常。
-    # 为了区分，我们只在这次会话为空列表时（也就是第一次打开）做这件事。
     if not st.session_state.messages:
         st.session_state.messages.append({"role": "assistant", "content": "你好！我是你的时间胶囊。把你的想法、安排和记忆交给我吧。💊"})
+
+# === 侧边栏：分类管理 & 设置 ===
+with st.sidebar:
+    st.header("🗂️ 分类管理")
+    df = load_memory()
+    # ... (省略中间已有代码) ...
+        # (保持原有的侧边栏逻辑不变，此处仅示意，实际替换时需要保留原代码)
+        # Note: ReplaceFileContent will match TargetContent exactly. 
+        # Since I'm targeting a large block including the display loop, I should be careful.
+        # Let's target the SECTION AFTER sidebar and BEFORE logic.
+        pass
+
+# ... (We need to jump to the UI part) ...
+
+# === 主界面 ===
+
+st.title("💊 时间胶囊 (Time Capsule)")
+
+tab1, tab2 = st.tabs(["💬 对话", "📊 报表"])
+
+# --- 标签页 1: 聊天 ---
+with tab1:
+    # 渲染历史消息
+    for message in st.session_state.messages:
+        render_msg(message["role"], message["content"])
+
+    prompt = st.chat_input("输入你的想法...")
+
+    if prompt:
+        # 用户输入 (渲染)
+        render_msg("user", prompt)
+        st.session_state.messages.append({"role": "user", "content": prompt})
+
+        category, target_time = process_input(prompt)
+
+        time_str = f" (时间: {target_time.strftime('%Y-%m-%d %H:%M')})" if target_time else ""
+        response = f"✅ 已记录到 **[{category}]**{time_str}"
+        
+        # 机器回复 (渲染)
+        render_msg("assistant", response)
+        st.session_state.messages.append({"role": "assistant", "content": response})
+        st.rerun()
 
 # === 侧边栏：分类管理 & 设置 ===
 with st.sidebar:
