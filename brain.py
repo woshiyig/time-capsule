@@ -366,6 +366,18 @@ with tab1:
 # --- 标签页 2: 报表 ---
 with tab2:
     if not df.empty:
+        # 1. 全局搜索
+        st.subheader("🔍 记忆搜索")
+        search_term = st.text_input("搜索关键词 (例如: '超市', '会议')", placeholder="输入关键词...")
+        if search_term:
+            search_result = df[df["内容"].str.contains(search_term, case=False, na=False)]
+            if not search_result.empty:
+                st.dataframe(search_result, use_container_width=True)
+            else:
+                st.info("没找到相关记录。")
+        st.divider()
+
+        # 2. 财务报表
         st.subheader("💰 财务报表")
         finance_df = df[ (df["分类"]=="财务") | (df["关联花销"] > 0) ].copy()
         
@@ -376,11 +388,45 @@ with tab2:
             col1, col2 = st.columns(2)
             with col1:
                 st.metric(label="总支出", value=f"¥ {total_cost:,.2f}")
+                # [NEW] 饼图分析
+                st.write("###### 消费占比")
+                if "category" in finance_df.columns:
+                     # 如果有详细分类（目前是 save_record 存的 text，需要提取）
+                     # 简单起见，目前因为 expenses 存在 Memory 里通常是"内容 (来自待办)", 分类是"财务"。
+                     # 待办的多笔花销存的是: 分类=cat, 内容=...
+                     st.bar_chart(finance_df["分类"].value_counts())
+                else:
+                     # 按'分类'列聚合 (财务, 餐饮, 交通等)
+                     # 注意：save_record 时，如果来自待办，分类是具体的（餐饮/交通）。如果是直接记账，分类是“财务”。
+                     # 这是一个混合数据。我们按“分类”画饼图。
+                     chart_data = finance_df.groupby("分类")["关联花销"].sum().reset_index()
+                     import altair as alt
+                     base = alt.Chart(chart_data).encode(theta=alt.Theta("关联花销", stack=True))
+                     pie = base.mark_arc(outerRadius=120).encode(
+                        color=alt.Color("分类"),
+                        order=alt.Order("关联花销", sort="descending"),
+                        tooltip=["分类", "关联花销"]
+                     )
+                     text = base.mark_text(radius=140).encode(
+                        text=alt.Text("关联花销", format=".1f"),
+                        order=alt.Order("关联花销", sort="descending"),
+                        color=alt.value("black") 
+                     )
+                     st.altair_chart(pie + text, use_container_width=True)
+
             with col2:
                 st.bar_chart(finance_df, x="记录时间", y="关联花销")
                 
             with st.expander("查看详细账单"):
-                st.dataframe(finance_df[["记录时间", "内容", "关联花销"]].sort_values("记录时间", ascending=False))
+                st.dataframe(finance_df[["记录时间", "分类", "内容", "关联花销"]].sort_values("记录时间", ascending=False))
+                # [NEW] 下载数据
+                csv = finance_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 下载账单 CSV",
+                    data=csv,
+                    file_name='finance_report.csv',
+                    mime='text/csv',
+                )
         else:
             st.caption("暂无财务记录")
             
