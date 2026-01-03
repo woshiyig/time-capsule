@@ -277,8 +277,8 @@ with st.sidebar:
                 for _, row in finances.iterrows():
                     cost = row['关联花销']
                     st.text(f"• -{cost}元: {row['内容']}")
-        else:
-            st.caption("暂无消费")
+            else:
+                st.caption("暂无消费")
 
     st.divider()
     with st.expander("⚙️ AI 设置"):
