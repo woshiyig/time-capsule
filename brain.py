@@ -399,139 +399,135 @@ with tab1:
     for message in st.session_state.messages:
         render_msg(message["role"], message["content"])
 
-    # === WeChat-Style 输入栏 ===
-    # 初始化输入模式
+    # === WeChat-Style 输入栏 (单行布局) ===
     if "input_mode" not in st.session_state:
-        st.session_state.input_mode = "text"  # "text" or "voice" or "file"
+        st.session_state.input_mode = "text"
     
-    # 创建三列布局: [模式切换] [输入区] [文件上传]
-    col_left, col_center, col_right = st.columns([0.1, 0.8, 0.1])
+    # 创建底部单行布局: [切换按钮] [输入区域] [更多按钮]
+    input_col1, input_col2, input_col3 = st.columns([0.08, 0.84, 0.08])
     
-    with col_left:
-        # 左侧: 键盘/语音切换按钮
+    with input_col1:
+        # 左侧: 模式切换按钮
         if st.session_state.input_mode == "text":
-            if st.button("🎤", key="switch_to_voice", help="切换到语音输入"):
+            if st.button("🎤", key="voice_toggle", use_container_width=True):
                 st.session_state.input_mode = "voice"
                 st.rerun()
-        else:
-            if st.button("⌨️", key="switch_to_text", help="切换到文字输入"):
+        elif st.session_state.input_mode == "voice":
+            if st.button("⌨️", key="text_toggle", use_container_width=True):
+                st.session_state.input_mode = "text"
+                st.rerun()
+        else:  # file mode
+            if st.button("⌨️", key="back_to_text", use_container_width=True):
                 st.session_state.input_mode = "text"
                 st.rerun()
     
-    with col_right:
-        # 右侧: 文件上传按钮
-        if st.button("➕", key="open_file_upload", help="上传文件到第二大脑"):
-            st.session_state.input_mode = "file"
+    with input_col3:
+        # 右侧: 文件上传切换
+        if st.button("➕", key="file_toggle", use_container_width=True):
+            if st.session_state.input_mode == "file":
+                st.session_state.input_mode = "text"
+            else:
+                st.session_state.input_mode = "file"
             st.rerun()
     
-    # 中间输入区: 根据模式显示不同组件
-    if st.session_state.input_mode == "text":
-        # 文字输入模式
-        prompt = st.chat_input("输入你的想法...")
-        if prompt:
-            # 用户输入 (渲染)
-            render_msg("user", prompt)
-            st.session_state.messages.append({"role": "user", "content": prompt})
-
-            category, target_time = process_input(prompt)
-            time_str = f" (时间: {target_time.strftime('%Y-%m-%d %H:%M')})" if target_time else ""
-            response = f"✅ 已记录到 **[{category}]**{time_str}"
-            
-            # 机器回复 (渲染)
-            render_msg("assistant", response)
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.rerun()
-    
-    elif st.session_state.input_mode == "voice":
-        # 语音输入模式
-        audio_value = st.audio_input("🎤 点击录音...")
-
-        if audio_value:
-            # Prevent infinite reprocessing
-            import hashlib
-            audio_bytes = audio_value.getvalue()
-            file_hash = hashlib.md5(audio_bytes).hexdigest()
-            
-            if "processed_audio_hashes" not in st.session_state:
-                st.session_state.processed_audio_hashes = set()
+    with input_col2:
+        # 中间: 根据模式显示输入组件
+        if st.session_state.input_mode == "text":
+            # 文字输入模式
+            user_input = st.text_input(
+                "输入你的想法...", 
+                key="text_input_field",
+                label_visibility="collapsed",
+                placeholder="输入你的想法..."
+            )
+            if user_input:
+                render_msg("user", user_input)
+                st.session_state.messages.append({"role": "user", "content": user_input})
                 
-            if file_hash not in st.session_state.processed_audio_hashes:
-                if not api_key:
-                     st.warning("⚠️ 请先在侧边栏配置 API Key。")
-                else:
-                     with st.spinner("🎧 正在听写..."):
-                        try:
-                            client = OpenAI(api_key=api_key, base_url=base_url)
-                            transcription = client.audio.transcriptions.create(
-                                model=asr_model_name, 
-                                file=audio_value
-                            )
-                            transcript_text = transcription.text
-                            
-                            if transcript_text:
-                                render_msg("user", transcript_text)
-                                st.session_state.messages.append({"role": "user", "content": transcript_text})
-
-                                category, target_time = process_input(transcript_text)
-                                time_str = f" (时间: {target_time.strftime('%Y-%m-%d %H:%M')})" if target_time else ""
-                                response = f"✅ 已记录到 **[{category}]**{time_str}"
-                                
-                                render_msg("assistant", response)
-                                st.session_state.messages.append({"role": "assistant", "content": response})
-                                st.session_state.processed_audio_hashes.add(file_hash)
-                                st.rerun() 
-                        except Exception as e:
-                            st.error(f"语音识别失败: {e}")
-    
-    elif st.session_state.input_mode == "file":
-        # 文件上传模式
-        uploaded_file = st.file_uploader(
-            "📎 上传文件到你的第二大脑", 
-            type=["jpg", "jpeg", "png", "pdf", "txt", "md"],
-            help="支持图片、PDF、文本文件"
-        )
+                category, target_time = process_input(user_input)
+                time_str = f" (时间: {target_time.strftime('%Y-%m-%d %H:%M')})" if target_time else ""
+                response = f"✅ 已记录到 **[{category}]**{time_str}"
+                
+                render_msg("assistant", response)
+                st.session_state.messages.append({"role": "assistant", "content": response})
+                st.rerun()
         
-        if uploaded_file:
-            with st.spinner("📖 正在读取文件内容..."):
-                try:
-                    file_content = ""
-                    file_type = uploaded_file.type
+        elif st.session_state.input_mode == "voice":
+            # 语音输入模式
+            audio_value = st.audio_input("🎤 录音", label_visibility="collapsed")
+            
+            if audio_value:
+                import hashlib
+                audio_bytes = audio_value.getvalue()
+                file_hash = hashlib.md5(audio_bytes).hexdigest()
+                
+                if "processed_audio_hashes" not in st.session_state:
+                    st.session_state.processed_audio_hashes = set()
                     
-                    # 处理不同文件类型
-                    if file_type.startswith("image/"):
-                        # 图片 OCR (使用 API)
-                        if not api_key:
-                            st.warning("⚠️ 图片识别需要配置 API Key。")
-                        else:
-                            # 使用 OpenAI Vision API 或类似接口
-                            # 注意: SiliconFlow 可能支持 vision 模型
-                            st.info("💡 图片 OCR 功能开发中，暂时将图片路径记录到记忆。")
-                            file_content = f"[图片上传] {uploaded_file.name}"
-                    
-                    elif file_type == "application/pdf":
-                        # PDF 文本提取
-                        try:
-                            import PyPDF2
-                            pdf_reader = PyPDF2.PdfReader(uploaded_file)
-                            for page in pdf_reader.pages:
-                                file_content += page.extract_text()
-                        except ImportError:
-                            st.warning("PDF 解析需要安装 PyPDF2 库")
-                            file_content = f"[PDF上传] {uploaded_file.name}"
-                    
-                    elif file_type.startswith("text/"):
-                        # 文本文件
-                        file_content = uploaded_file.read().decode("utf-8")
-                    
-                    # 存入记忆
-                    if file_content:
-                        save_record("创意", f"📄 文件内容: {file_content[:500]}...", status="Done")
-                        render_msg("assistant", f"✅ 已将文件内容存入你的第二大脑！\n摘要: {file_content[:100]}...")
-                        st.session_state.input_mode = "text"  # 恢复文字模式
-                        st.rerun()
+                if file_hash not in st.session_state.processed_audio_hashes:
+                    if not api_key:
+                        st.warning("⚠️ 请先配置 API Key")
+                    else:
+                        with st.spinner("🎧 听写中..."):
+                            try:
+                                client = OpenAI(api_key=api_key, base_url=base_url)
+                                transcription = client.audio.transcriptions.create(
+                                    model=asr_model_name, 
+                                    file=audio_value
+                                )
+                                transcript_text = transcription.text
+                                
+                                if transcript_text:
+                                    render_msg("user", transcript_text)
+                                    st.session_state.messages.append({"role": "user", "content": transcript_text})
+                                    
+                                    category, target_time = process_input(transcript_text)
+                                    time_str = f" (时间: {target_time.strftime('%Y-%m-%d %H:%M')})" if target_time else ""
+                                    response = f"✅ 已记录到 **[{category}]**{time_str}"
+                                    
+                                    render_msg("assistant", response)
+                                    st.session_state.messages.append({"role": "assistant", "content": response})
+                                    st.session_state.processed_audio_hashes.add(file_hash)
+                                    st.rerun()
+                            except Exception as e:
+                                st.error(f"识别失败: {e}")
+        
+        elif st.session_state.input_mode == "file":
+            # 文件上传模式
+            uploaded_file = st.file_uploader(
+                "上传文件",
+                type=["jpg", "jpeg", "png", "pdf", "txt", "md"],
+                label_visibility="collapsed"
+            )
+            
+            if uploaded_file:
+                with st.spinner("📖 读取中..."):
+                    try:
+                        file_content = ""
+                        file_type = uploaded_file.type
                         
-                except Exception as e:
-                    st.error(f"文件处理失败: {e}")
+                        if file_type.startswith("image/"):
+                            st.info("💡 图片 OCR 功能开发中")
+                            file_content = f"[图片] {uploaded_file.name}"
+                        elif file_type == "application/pdf":
+                            try:
+                                import PyPDF2
+                                pdf_reader = PyPDF2.PdfReader(uploaded_file)
+                                for page in pdf_reader.pages:
+                                    file_content += page.extract_text()
+                            except ImportError:
+                                st.warning("需要安装 PyPDF2")
+                                file_content = f"[PDF] {uploaded_file.name}"
+                        elif file_type.startswith("text/"):
+                            file_content = uploaded_file.read().decode("utf-8")
+                        
+                        if file_content:
+                            save_record("创意", f"📄 {file_content[:500]}...", status="Done")
+                            render_msg("assistant", f"✅ 已存入！\n{file_content[:100]}...")
+                            st.session_state.input_mode = "text"
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"失败: {e}")
 
 # --- 标签页 2: 报表 ---
 with tab2:
