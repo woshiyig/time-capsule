@@ -4,6 +4,11 @@ from dateparser.search import search_dates
 import pandas as pd
 import os
 from datetime import datetime, timedelta
+import auth
+
+# --- 登录校验 ---
+if not auth.check_password():
+    st.stop()
 
 # [NEW] AI 支持
 try:
@@ -312,7 +317,9 @@ if "messages" not in st.session_state:
 
 # === 侧边栏：分类管理 & 设置 ===
 with st.sidebar:
+    auth.logout()
     st.header("🗂️ 分类管理")
+
     df = load_memory()
     
     if not df.empty:
