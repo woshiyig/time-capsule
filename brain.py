@@ -148,30 +148,58 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
     st.session_state.messages.append({"role": "assistant", "content": "你好！我是你的时间胶囊。把你的想法、安排和记忆交给我吧。💊"})
 
-# === 侧边栏：任务管理 ===
+# === 侧边栏：分类管理 ===
 with st.sidebar:
-    st.header("📅 待办与日程")
-    st.caption("未完成的任务会留在这里，等待你完成。")
+    st.header("🗂️ 分类管理")
     df = load_memory()
     
     if not df.empty:
-        # pending_tasks 逻辑保持不变...
-        pending_tasks = df[ (df["状态"] == "Pending") & (df["分类"].isin(["日程", "待办"])) ]
-        
-        if pending_tasks.empty:
-            st.info("目前没有待办事项 🎉")
-        else:
-            for index, row in pending_tasks.iterrows():
-                with st.expander(f"{row['分类']}: {row['内容'][:10]}..."):
-                    st.write(f"内容: {row['内容']}")
-                    st.write(f"时间: {row['目标时间']}")
-                    with st.form(key=f"finish_task_{index}"):
-                        cost = st.number_input("实际花费 (元)", min_value=0.0, step=10.0)
-                        submit = st.form_submit_button("✅ 完成并归档")
+        # --- 1. 待办 (Pending) ---
+        todos = df[ (df["状态"] == "Pending") & (df["分类"] == "待办") ]
+        with st.expander(f"📝 待办 ({len(todos)})", expanded=True):
+            if not todos.empty:
+                for index, row in todos.iterrows():
+                    st.write(f"**{row['内容']}**")
+                    st.caption(f"📅 目标: {row['目标时间']}")
+                    with st.form(key=f"finish_todo_{index}"):
+                        cost = st.number_input("花费", min_value=0.0, step=10.0, key=f"cost_todo_{index}")
+                        submit = st.form_submit_button("✅ 完成")
                         if submit:
                             update_status(index, "Done", cost)
-                            st.success("已完成！(如有花销已自动记账)")
                             st.rerun()
+            else:
+                st.caption("暂无待办")
+
+        # --- 2. 创意 (Pending) ---
+        ideas = df[ (df["状态"] == "Pending") & (df["分类"] == "创意") ]
+        with st.expander(f"💡 创意 ({len(ideas)})", expanded=True):
+            if not ideas.empty:
+                 for index, row in ideas.iterrows():
+                    st.write(f"**{row['内容']}**")
+                    if st.button("✨ 落地", key=f"finish_idea_{index}"):
+                        update_status(index, "Done")
+                        st.rerun()
+            else:
+                st.caption("暂无创意")
+
+        # --- 3. 近期日程 (History) ---
+        schedules = df[ df["分类"] == "日程" ].sort_values("记录时间", ascending=False).head(5)
+        with st.expander("📅 近期日程", expanded=False):
+            if not schedules.empty:
+                for _, row in schedules.iterrows():
+                    st.text(f"{row['目标时间'][:10]}: {row['内容']}")
+            else:
+                st.caption("暂无日程")
+
+        # --- 4. 近期财务 (History) ---
+        finances = df[ (df["分类"] == "财务") | (df["关联花销"] > 0) ].sort_values("记录时间", ascending=False).head(5)
+        with st.expander("💰 近期财务", expanded=False):
+            if not finances.empty:
+                for _, row in finances.iterrows():
+                    cost = row['关联花销']
+                    st.text(f"-{cost}: {row['内容']}")
+            else:
+                st.caption("暂无消费")
 
 # === 主界面：多页面切换 ===
 
